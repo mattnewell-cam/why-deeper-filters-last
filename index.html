@@ -116,7 +116,8 @@ input[type="range"] { width: 100%; accent-color: var(--charge); }
 #chart { width: 100%; height: auto; display: block; }
 #chart text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-3); }
 #chart text.lg { fill: var(--ink-2); font-size: 11.5px; }
-.mult { max-width: 460px; }
+.knobs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 640px) { .knobs { grid-template-columns: minmax(0, 1fr); gap: 14px; } }
 .assume { margin: 0; display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .assume dt, .assume dd { margin: 0; background: var(--surface); padding: 9px 12px; font-size: 14px; }
 .assume dt { color: var(--ink-2); font-weight: 600; }
@@ -144,7 +145,11 @@ input[type="range"] { width: 100%; accent-color: var(--charge); }
       </div>
       <div class="ctrl"><button type="button" id="play" class="primary">Pause</button><button type="button" id="restart">Restart</button></div>
     </div>
-    <div class="field mult"><label for="mm">Material in the second filter, × the first <b id="mmv">2×</b></label><input type="range" id="mm" min="1.2" max="4" step="0.1" value="2"></div>
+    <div class="knobs">
+      <div class="field"><label for="mm">Material in the second filter, × the first <b id="mmv">2×</b></label><input type="range" id="mm" min="1.2" max="4" step="0.1" value="2"></div>
+      <div class="field"><label for="pfc">Charged layer PF <b id="pfcv">20</b></label><input type="range" id="pfc" min="5" max="50" step="1" value="20"></div>
+      <div class="field"><label for="pfs">Spent layer PF <b id="pfsv">2.4</b></label><input type="range" id="pfs" min="1" max="3.5" step="0.1" value="2.4"></div>
+    </div>
     <div class="lane" id="lane0">
       <div class="lane-head"><span class="name">Just enough<small id="l0-sub"></small></span><span class="read"><span class="day"></span><span class="pf"></span><span class="pill ok"></span></span></div>
       <canvas aria-hidden="true"></canvas>
@@ -184,12 +189,11 @@ input[type="range"] { width: 100%; accent-color: var(--charge); }
 
   <section class="panel">
     <h2>Try other numbers</h2>
-    <p class="prose">Extra material can go into depth (more layers: higher pressure drop) or area (bigger layers: lower pressure drop, slower air). The chart compares putting it all into depth with splitting it so the pressure drop stays the same. Set a spent layer's PF to 1 (it catches nothing) to remove the shielding.</p>
+    <p class="prose">Extra material can go into depth (more layers: higher pressure drop) or area (bigger layers: lower pressure drop, slower air). The chart compares putting it all into depth with splitting it so the pressure drop stays the same. Set the spent layer PF at the top to 1 (it catches nothing) to remove the shielding.</p>
     <div class="pg">
       <div class="pg-ctrl">
-        <div class="field"><label for="pN">Layers <b id="pNv"></b></label><input type="range" id="pN" min="3" max="12" step="1" value="4"></div>
+        <div class="field"><label for="pN">Layers <b id="pNv"></b></label><input type="range" id="pN" min="2" max="12" step="1" value="4"></div>
         <div class="field"><label for="pK">Area, × the just-enough filter <b id="pKv"></b></label><input type="range" id="pK" min="1" max="3" step="0.1" value="1.5"></div>
-        <div class="field"><label for="pS">A spent layer's PF <b id="pSv"></b></label><input type="range" id="pS" min="1" max="4" step="0.1" value="2.4"></div>
         <dl class="pout">
           <div><dt>Material, × the just-enough filter</dt><dd id="o-m">—</dd></div>
           <div><dt>Pressure drop, × the just-enough filter</dt><dd id="o-dp">—</dd></div>
@@ -212,14 +216,15 @@ input[type="range"] { width: 100%; accent-color: var(--charge); }
 
 <script>
 // ---------------------------------------------------------------- model (round numbers, not the tested media)
-const CH = 1 - 1 / 20;    // charged layer: PF 20 (share caught 95%) at the just-enough filter's face speed
-const SP0 = 1 - 1 / 2.4;  // discharged layer: PF 2.4 at the same face speed (IPA/DIW-discharged layers measured 2.3–2.5)
+const PF_C0 = 20, PF_S0 = 2.4;   // defaults: charged layer PF 20, discharged PF 2.4 (IPA/DIW-discharged layers measured 2.3–2.5)
+let CH = 1 - 1 / PF_C0;    // charged layer: share caught, at the just-enough filter's face speed (set by the slider)
+let SP0 = 1 - 1 / PF_S0;   // discharged layer: share caught, at the same face speed (set by the slider)
 const VEXP = 0.307;   // a layer's logs go as face speed^-0.307 (the vacuum-bag electret fit); face speed ∝ 1/area
 const TARGET = 3;     // logs, PF 1,000
 const TEST_LOSS = 0.41, TEST_DAYS = 6.45;   // ambient-air test: single layers lost ~41% of their logs in 6.45 days
 const MAXD = 36500;   // stop simulating at 100 years
-const D0 = { N: Math.ceil(TARGET / -Math.log10(1 - CH) - 1e-9), k: 1 };   // just enough layers for the target
-let D1 = { N: 7, k: 10 / 7 };   // set by the material slider; N / k ≈ 5 keeps the pressure drop
+let D0 = { N: 3, k: 1 };   // just enough layers for the target; set in computeDesign
+let D1 = { N: 4, k: 1.5 };   // set by the material slider; N / k ≈ D0.N keeps the pressure drop
 const lg = f => f <= 0 ? 0 : -Math.log10(1 - f);
 // A layer's logs fall linearly with its charge c (1 = full, 0 = gone) and rise with area k (slower air).
 const layerLogs = (c, sp, k) => (lg(sp) + (lg(CH) - lg(sp)) * c) * Math.pow(k, VEXP);
@@ -255,19 +260,18 @@ function advance(st, F, sp, until) {
   }
 }
 function run(N, k, F, sp) { const st = newState(N, k); advance(st, F, sp, MAXD); return st; }
-const lifeOf = (N, k, F, sp) => { const st = run(N, k, F, sp); return st.failed ? st.failDay : Infinity; };
+const lifeOf = (N, k, F, sp) => { if (totalLogs(newState(N, k), sp) < TARGET) return 0; const st = run(N, k, F, sp); return st.failed ? st.failDay : Infinity; };
 
 // Dust rate: a single layer at the just-enough filter's face speed loses TEST_LOSS of its logs in TEST_DAYS, as in the
 // ambient-air test. Time to go from c = 1 to c_t is (1/F) ∫ dc / (share caught), so F = that integral / TEST_DAYS.
+// Worked out once at the default PFs: changing the PF sliders keeps the dust rate and the dust a layer takes to lose its charge.
 const F = (() => {
   const a = lg(SP0), b = lg(CH) - lg(SP0), ct = ((1 - TEST_LOSS) * lg(CH) - a) / b, n = 4000;
   let s = 0;
   for (let j = 0; j < n; j++) { const c = ct + (1 - ct) * (j + 0.5) / n; s += (1 - ct) / n / (1 - Math.pow(10, -(a + b * c))); }
   return s / TEST_DAYS;
 })();
-const ref0 = run(D0.N, D0.k, F, SP0);
-const L0 = ref0.failDay;
-let MULT = 2, ref1, L1, sk1;
+let MULT = 2, ref0, L0, ref1, L1, sk1;
 // m × the just-enough filter's material, split evenly between depth and area: layers ≈ N0·√m (whole layers), area = N0·m / layers.
 const designFor = m => { const N = Math.max(D0.N, Math.round(D0.N * Math.sqrt(m))); return { N, k: D0.N * m / N }; };
 
@@ -281,7 +285,6 @@ const kStr = k => `${(Math.round(k * 100) / 100).toString()}×`;
 const multStr = m => m === 2 ? 'Double the material' : `${m}× the material`;
 const dpStr = () => { const r = D1.N / D1.k / D0.N; return Math.abs(r - 1) < 0.03 ? 'same pressure drop' : `${r.toFixed(2)}× the pressure drop`; };
 const startPF = d => Number(Math.pow(10, d.N * lg(CH) * Math.pow(d.k, VEXP)).toPrecision(2)).toLocaleString('en-GB');
-$('l0-sub').textContent = `${D0.N} layers, starts at PF ${startPF(D0)}`;
 
 // ---------------------------------------------------------------- clock: wall seconds → days, exponential so both failures fit
 const S5 = 5, S10 = 23, SEND = S10 + 2.5;
@@ -316,6 +319,8 @@ new MutationObserver(readColors).observe(document.documentElement, { attributes:
 const RATE = 75, SPEED = 230, STUCK_MAX = 60;
 let KMAX, NMAX, GMAX;
 function computeDesign(m) {
+  D0 = { N: Math.ceil(TARGET / lg(CH) - 1e-9), k: 1 };
+  ref0 = run(D0.N, D0.k, F, SP0); L0 = ref0.failed ? ref0.failDay : MAXD;
   MULT = m; D1 = designFor(m);
   ref1 = run(D1.N, D1.k, F, SP0); L1 = ref1.failed ? ref1.failDay : MAXD; sk1 = Math.pow(D1.k, VEXP);
   KMAX = Math.max(D0.k, D1.k); NMAX = Math.max(D0.N, D1.N);
@@ -439,8 +444,11 @@ function renderStatic() {
 $('h-x').textContent = ref1.failed ? ratioStr(L1 / L0) : 'unlimited';
 $('h-m').textContent = multStr(MULT);
 $('l1-name').textContent = multStr(MULT);
+$('l0-sub').textContent = `${D0.N} layers, starts at PF ${startPF(D0)}`;
 $('l1-sub').textContent = `${D1.N} layers, ${kStr(D1.k)} the area, ${dpStr()}, starts at PF ${startPF(D1)}`;
 $('mmv').textContent = `${MULT}×`;
+$('pfcv').textContent = +$('pfc').value; $('pfsv').textContent = (+$('pfs').value).toFixed(1);
+renderAssume();
 for (const id of ['sq5', 'sq10', 'used']) $(id).replaceChildren();
 $('m-lab0').textContent = `${D0.N} layers, replaced`;
 {
@@ -487,17 +495,21 @@ $('m-lab0').textContent = `${D0.N} layers, replaced`;
   used.append(e);
 }
 }
-renderStatic();
-$('mm').addEventListener('input', () => {
+function redesign() {
   computeDesign(+$('mm').value);
-  const ln = lanes[1]; ln.N = D1.N; ln.k = D1.k;
+  lanes[0].N = D0.N; lanes[0].k = D0.k; lanes[1].N = D1.N; lanes[1].k = D1.k;
   restart(); playing = !reduce; setPlayLabel();
   renderStatic();
+}
+$('mm').addEventListener('input', redesign);
+for (const id of ['pfc', 'pfs']) $(id).addEventListener('input', () => {
+  CH = 1 - 1 / +$('pfc').value; SP0 = 1 - 1 / +$('pfs').value;
+  redesign(); updatePlay();
 });
 
 // ---------------------------------------------------------------- playground
 const cache = new Map();
-const lifeC = (N, k, sp) => { const key = `${N}|${k.toFixed(3)}|${sp}`; if (!cache.has(key)) cache.set(key, lifeOf(N, k, F, sp)); return cache.get(key); };
+const lifeC = (N, k, sp) => { const key = `${N}|${k.toFixed(3)}|${sp}|${CH}`; if (!cache.has(key)) cache.set(key, lifeOf(N, k, F, sp)); return cache.get(key); };
 const el = (tag, attrs = {}, text) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const a in attrs) e.setAttribute(a, attrs[a]); if (text != null) e.textContent = text; return e; };
 function drawChart(N, k, sp) {
   const svg = $('chart'); svg.replaceChildren();
@@ -538,8 +550,8 @@ function drawChart(N, k, sp) {
   svg.append(el('text', { class: 'lg', x: lgx + 26, y: lgy + rows.length * 17 + 4 }, 'your settings'));
 }
 function updatePlay() {
-  const N = +$('pN').value, k = +$('pK').value, sp = 1 - 1 / +$('pS').value;
-  $('pNv').textContent = N; $('pKv').textContent = kStr(k); $('pSv').textContent = (+$('pS').value).toFixed(1);
+  const N = +$('pN').value, k = +$('pK').value, sp = SP0;
+  $('pNv').textContent = N; $('pKv').textContent = kStr(k);
   const life = lifeC(N, k, sp), base = lifeC(D0.N, D0.k, sp);
   $('o-m').textContent = `${(N * k / D0.N).toFixed(2)}×`;
   $('o-dp').textContent = `${(N / k / D0.N).toFixed(2)}×`;
@@ -549,21 +561,22 @@ function updatePlay() {
   $('o-mat').textContent = `${mat.toFixed(1)}× the just-enough filter (just-enough filter replaced: ${Math.ceil(100 / base)}×)`;
   drawChart(N, k, sp);
 }
-for (const id of ['pN', 'pK', 'pS']) $(id).addEventListener('input', updatePlay);
+for (const id of ['pN', 'pK']) $(id).addEventListener('input', updatePlay);
 updatePlay();
 
-{
+function renderAssume() {
   const pf = f => (1 / (1 - f)).toFixed(f === 0 ? 0 : 2).replace(/\.?0+$/, '');
   const rows = [
-    ['Charged layer', `PF <b>${pf(CH)}</b> per layer: catches ${Math.round(CH * 100)}% of the dust that reaches it (${lg(CH).toFixed(2)} logs), at the ${D0.N}-layer filter's face speed.`],
-    ['Discharged (spent) layer', `PF <b>${pf(SP0)}</b> per layer: catches ${Math.round(SP0 * 100)}% (${lg(SP0).toFixed(2)} logs), at the same face speed. The playground slider changes this.`],
+    ['Charged layer', `PF <b>${pf(CH)}</b> per layer: catches ${Math.round(CH * 100)}% of the dust that reaches it (${lg(CH).toFixed(2)} logs), at the ${D0.N}-layer filter's face speed. Set at the top.`],
+    ['Discharged (spent) layer', `PF <b>${pf(SP0)}</b> per layer: catches ${Math.round(SP0 * 100)}% (${lg(SP0).toFixed(2)} logs), at the same face speed. Set at the top.`],
     ['In between', 'A layer\'s logs fall in a straight line from charged to discharged as its charge goes. Its charge falls in proportion to the dust it has caught per square metre.'],
-    ['Dust rate', `Set so a single layer loses ${Math.round(TEST_LOSS * 100)}% of its logs in ${TEST_DAYS} days, as single layers did in the ambient-air loading test (10–17 Nov 2026).`],
+    ['Dust rate', `Set so a single layer at PF ${PF_C0} charged and ${PF_S0} spent loses ${Math.round(TEST_LOSS * 100)}% of its logs in ${TEST_DAYS} days, as single layers did in the ambient-air loading test (10–17 Nov 2026). Changing the PFs keeps this dust rate and the dust a layer takes to lose its charge.`],
     ['Bigger area', `Air moves more slowly, and every layer's logs, charged or discharged, go as face speed^−${VEXP} (the vacuum-bag electret fit). Dust per square metre falls in proportion to the area.`],
     ['Target', 'PF 1,000 (3 logs) the whole time. PF is 10 to the power of the sum of the layers\' logs.'],
     ['Pressure drop', 'Goes as layers ÷ area. Clogging is left out.'],
   ];
   $('assume').innerHTML = rows.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('');
 }
+renderStatic();
 $('foot').textContent = 'Simplified model with round numbers, not the tested media.';
 </script>
