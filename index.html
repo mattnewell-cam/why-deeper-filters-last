@@ -131,7 +131,7 @@ input[type="range"] { width: 100%; accent-color: var(--charge); }
 <div class="wrap">
   <header>
     <p class="kicker">Electret filter life · simplified model</p>
-    <h1><span id="h-m">Double the material</span>, about <span class="x" id="h-x">—</span> the life</h1>
+    <h1 id="h1">Double the material, about <span class="x">—</span> the life</h1>
     <p class="sub">A filter with just enough layers drops below PF 1,000 soon after its first layer loses its charge. Give it more material, split between more layers and more area so the pressure drop stays about the same, and it lasts far longer. Both filters below get the same dusty air, and the clock speeds up as it runs.</p>
   </header>
 
@@ -280,7 +280,7 @@ const $ = id => document.getElementById(id);
 const fmtDay = d => d < 10 ? d.toFixed(1) : Math.round(d).toLocaleString('en-GB');
 const pfStr = L => L >= 5 ? '> 100,000' : Number(Math.pow(10, L).toPrecision(2)).toLocaleString('en-GB');
 const fmtLife = d => !isFinite(d) ? 'never drops below 1,000' : d >= 3650 ? `${Math.round(d / 365)} years` : `${fmtDay(d)} days`;
-const ratioStr = r => r >= 20 ? `${Math.round(r / 10) * 10}×` : `${Math.round(r)}×`;
+const ratioStr = r => r < 1 ? `${Number(r.toPrecision(2))}×` : r >= 20 ? `${Math.round(r / 10) * 10}×` : `${Math.round(r)}×`;
 const kStr = k => `${(Math.round(k * 100) / 100).toString()}×`;
 const multStr = m => m === 2 ? 'Double the material' : `${m}× the material`;
 const dpStr = () => { const r = D1.N / D1.k / D0.N; return Math.abs(r - 1) < 0.03 ? 'same pressure drop' : `${r.toFixed(2)}× the pressure drop`; };
@@ -319,7 +319,7 @@ new MutationObserver(readColors).observe(document.documentElement, { attributes:
 const RATE = 75, SPEED = 230, STUCK_MAX = 60;
 let KMAX, NMAX, GMAX;
 function computeDesign(m) {
-  D0 = { N: Math.ceil(TARGET / lg(CH) - 1e-9), k: 1 };
+  D0 = { N: Math.floor(TARGET / lg(CH) + 1e-9) + 1, k: 1 };   // fewest layers that start above the target
   ref0 = run(D0.N, D0.k, F, SP0); L0 = ref0.failed ? ref0.failDay : MAXD;
   MULT = m; D1 = designFor(m);
   ref1 = run(D1.N, D1.k, F, SP0); L1 = ref1.failed ? ref1.failDay : MAXD; sk1 = Math.pow(D1.k, VEXP);
@@ -441,8 +441,7 @@ requestAnimationFrame(frame);
 
 // ---------------------------------------------------------------- static sections (redrawn when the material slider moves)
 function renderStatic() {
-$('h-x').textContent = ref1.failed ? ratioStr(L1 / L0) : 'unlimited';
-$('h-m').textContent = multStr(MULT);
+$('h1').innerHTML = ref1.failed ? `${multStr(MULT)}, about <span class="x">${ratioStr(L1 / L0)}</span> the life` : `${multStr(MULT)}: never drops below PF 1,000`;
 $('l1-name').textContent = multStr(MULT);
 $('l0-sub').textContent = `${D0.N} layers, starts at PF ${startPF(D0)}`;
 $('l1-sub').textContent = `${D1.N} layers, ${kStr(D1.k)} the area, ${dpStr()}, starts at PF ${startPF(D1)}`;
