@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Why Deeper Filters Last</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column. The live two-lane run comes first, then the 100-day material count, the two reasons, and a playground. */
+:root {
+  --bg: #f2f4f2; --surface: #ffffff; --ink: #16201c; --ink-2: #46524d; --ink-3: #77827d; --line: #d9dfdb;
+  --charge: #2a68cf; --spent: #b1b9b5; --dust: #c2771f; --fail: #c4372b; --ok: #2c8657; --need: #cdd5d1;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1413; --surface: #161e1b; --ink: #e5ebe8; --ink-2: #b1bcb7; --ink-3: #85918c; --line: #28332f;
+    --charge: #4f8ff0; --spent: #4e5955; --dust: #e39b48; --fail: #f06a5b; --ok: #5ec48d; --need: #33403b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1413; --surface: #161e1b; --ink: #e5ebe8; --ink-2: #b1bcb7; --ink-3: #85918c; --line: #28332f;
+  --charge: #4f8ff0; --spent: #4e5955; --dust: #e39b48; --fail: #f06a5b; --ok: #5ec48d; --need: #33403b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.55; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 56px;
+}
+.wrap { max-width: 900px; margin: 0 auto; display: grid; gap: 22px; }
+.kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(32px, 6vw, 56px); line-height: 1.0; letter-spacing: -0.015em; margin: 0; text-wrap: balance; }
+h1 .x { color: var(--charge); }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.15; margin: 0; text-wrap: balance; }
+.sub { margin: 12px 0 0; color: var(--ink-2); max-width: 64ch; }
+p { margin: 0; }
+.prose { max-width: 66ch; color: var(--ink-2); }
+.prose b, .read b { color: var(--ink); font-weight: 600; }
+:focus-visible { outline: 2px solid var(--charge); outline-offset: 2px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; display: grid; gap: 14px; }
+
+/* stage */
+.stage-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 18px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.key { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 7px; height: 16px; border-radius: 2px; display: inline-block; }
+.sw.charge { background: var(--charge); } .sw.spent { background: var(--spent); }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot.dust { background: var(--dust); } .dot.fail { background: var(--fail); }
+.ctrl { display: flex; gap: 8px; }
+button { font: inherit; font-size: 13.5px; font-weight: 600; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--charge); border-color: var(--charge); color: #fff; }
+.lane { display: grid; gap: 6px; }
+.lane-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 14px; }
+.lane-head .name { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.lane-head .name small { font-family: var(--font-body); font-weight: 500; font-size: 13px; color: var(--ink-3); margin-left: 6px; }
+.read { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-family: var(--font-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.pill { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.fail { color: var(--fail); }
+canvas { width: 100%; height: 176px; display: block; background: var(--bg); border-radius: 8px; transition: opacity .4s; }
+.lane.down canvas { opacity: 0.55; }
+.note { font-size: 13px; color: var(--ink-3); max-width: 76ch; }
+
+/* material */
+.mat { display: grid; gap: 12px; }
+.mat-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 560px) { .mat-row { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+.mat-lab { font-size: 13.5px; color: var(--ink-2); }
+.mat-lab b { display: block; font-family: var(--font-mono); font-weight: 500; font-size: 20px; color: var(--ink); }
+.sq { display: flex; flex-wrap: wrap; gap: 6px; }
+.grp { display: inline-flex; gap: 2px; }
+.grp i { width: 9px; height: 14px; border-radius: 1.5px; background: var(--charge); display: inline-block; }
+
+/* why */
+.why { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 760px) { .why { grid-template-columns: minmax(0, 1fr); } }
+.why .panel { align-content: start; }
+.spare { display: grid; gap: 14px; }
+.sp-row { display: grid; gap: 5px; }
+.sp-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
+.sp-top b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+.sp-bar { position: relative; height: 22px; background: var(--bg); border-radius: 4px; overflow: hidden; display: flex; }
+.sp-bar i { display: block; height: 100%; }
+.sp-bar i.need { background: var(--need); } .sp-bar i.extra { background: var(--charge); }
+.sp-bar .tline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--ink); }
+.sp-axis { position: relative; height: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.sp-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.used { display: grid; gap: 6px; }
+.u-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 74px; gap: 8px; align-items: center; font-size: 12.5px; }
+.u-row .lab { color: var(--ink-2); font-family: var(--font-mono); }
+.u-row .bar { height: 14px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.u-row .bar i { display: block; height: 100%; background: var(--spent); }
+.u-row .val { font-family: var(--font-mono); text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.u-row .reach { grid-column: 2 / 4; margin-top: -4px; color: var(--ink-3); font-size: 11.5px; }
+.u-row.end .bar i { background: var(--fail); }
+
+/* playground */
+.pg { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .pg { grid-template-columns: minmax(0, 1fr); } }
+.pg-ctrl { display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; }
+.field label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.field label b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+input[type="range"] { width: 100%; accent-color: var(--charge); }
+.pout { margin: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.pout div { background: var(--surface); padding: 9px 12px; display: grid; gap: 1px; }
+.pout dt { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.pout dd { margin: 0; font-family: var(--font-mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+#chart { width: 100%; height: auto; display: block; }
+#chart text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-3); }
+#chart text.lg { fill: var(--ink-2); font-size: 11.5px; }
+.mult { max-width: 460px; }
+.assume { margin: 0; display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.assume dt, .assume dd { margin: 0; background: var(--surface); padding: 9px 12px; font-size: 14px; }
+.assume dt { color: var(--ink-2); font-weight: 600; }
+.assume dd { color: var(--ink); }
+.assume dd b { font-family: var(--font-mono); font-weight: 500; }
+@media (max-width: 560px) { .assume { grid-template-columns: minmax(0, 1fr); } .assume dt { padding-bottom: 0; } .assume dd { padding-top: 2px; } }
+.foot { font-size: 12.5px; color: var(--ink-3); max-width: 80ch; line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) { canvas { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="kicker">Electret filter life · simplified model</p>
+    <h1><span id="h-m">Double the material</span>, about <span class="x" id="h-x">—</span> the life</h1>
+    <p class="sub">A filter with just enough layers drops below PF 1,000 soon after its first layer loses its charge. Give it more material, split between more layers and more area so the pressure drop stays about the same, and it lasts far longer. Both filters below get the same dusty air, and the clock speeds up as it runs.</p>
+  </header>
+
+  <section class="panel stage" aria-label="Two filters on the same dusty air">
+    <div class="stage-top">
+      <div class="legend">
+        <span class="key"><i class="sw charge"></i>Charged layer</span>
+        <span class="key"><i class="sw spent"></i>Spent layer</span>
+        <span class="key"><i class="dot dust"></i>Dust</span>
+        <span class="key"><i class="dot fail"></i>Dust that got through</span>
+      </div>
+      <div class="ctrl"><button type="button" id="play" class="primary">Pause</button><button type="button" id="restart">Restart</button></div>
+    </div>
+    <div class="field mult"><label for="mm">Material in the second filter, × the first <b id="mmv">2×</b></label><input type="range" id="mm" min="1.2" max="4" step="0.1" value="2"></div>
+    <div class="lane" id="lane0">
+      <div class="lane-head"><span class="name">Just enough<small id="l0-sub"></small></span><span class="read"><span class="day"></span><span class="pf"></span><span class="pill ok"></span></span></div>
+      <canvas aria-hidden="true"></canvas>
+    </div>
+    <div class="lane" id="lane1">
+      <div class="lane-head"><span class="name"><span id="l1-name">Double the material</span><small id="l1-sub"></small></span><span class="read"><span class="day"></span><span class="pf"></span><span class="pill ok"></span></span></div>
+      <canvas aria-hidden="true"></canvas>
+    </div>
+    <p class="note">Layer height shows area, and dust moves more slowly through the bigger layers. The bar at the right of each filter is its protection: one block per layer, stacked in logs, layer 1 at the bottom. The dashed line is PF 1,000.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Material for 100 days</h2>
+    <p class="prose" id="mat-text"></p>
+    <div class="mat">
+      <div class="mat-row"><span class="mat-lab"><b id="m-n5">—</b><span id="m-lab0"></span></span><div class="sq" id="sq5"></div></div>
+      <div class="mat-row"><span class="mat-lab"><b id="m-n10">—</b><span id="m-lab1"></span></span><div class="sq" id="sq10"></div></div>
+    </div>
+  </section>
+
+  <div class="why">
+    <section class="panel">
+      <h2>It starts with more to lose</h2>
+      <p class="prose" id="spare-text"></p>
+      <div class="spare">
+        <div class="sp-row"><div class="sp-top"><span id="sp0l"></span><b id="sp0v"></b></div><div class="sp-bar" id="sp0"></div></div>
+        <div class="sp-row"><div class="sp-top"><span id="sp1l"></span><b id="sp1v"></b></div><div class="sp-bar" id="sp1"></div></div>
+        <div class="sp-axis" id="sp-axis"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Spent layers keep catching dust</h2>
+      <p class="prose" id="shield-text"></p>
+      <div class="used" id="used"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Try other numbers</h2>
+    <p class="prose">Extra material can go into depth (more layers: higher pressure drop) or area (bigger layers: lower pressure drop, slower air). The chart compares putting it all into depth with splitting it so the pressure drop stays the same. Set a spent layer's PF to 1 (it catches nothing) to remove the shielding.</p>
+    <div class="pg">
+      <div class="pg-ctrl">
+        <div class="field"><label for="pN">Layers <b id="pNv"></b></label><input type="range" id="pN" min="3" max="12" step="1" value="4"></div>
+        <div class="field"><label for="pK">Area, × the just-enough filter <b id="pKv"></b></label><input type="range" id="pK" min="1" max="3" step="0.1" value="1.5"></div>
+        <div class="field"><label for="pS">A spent layer's PF <b id="pSv"></b></label><input type="range" id="pS" min="1" max="4" step="0.1" value="2.4"></div>
+        <dl class="pout">
+          <div><dt>Material, × the just-enough filter</dt><dd id="o-m">—</dd></div>
+          <div><dt>Pressure drop, × the just-enough filter</dt><dd id="o-dp">—</dd></div>
+          <div><dt>Stays at or above PF 1,000 for</dt><dd id="o-life">—</dd></div>
+          <div><dt>Compared with the just-enough filter</dt><dd id="o-x">—</dd></div>
+          <div><dt>Material for 100 days</dt><dd id="o-mat">—</dd></div>
+        </dl>
+      </div>
+      <svg id="chart" viewBox="0 0 560 300" role="img" aria-label="How long the filter stays at or above PF 1,000 against the amount of material"></svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Assumptions</h2>
+    <dl class="assume" id="assume"></dl>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+// ---------------------------------------------------------------- model (round numbers, not the tested media)
+const CH = 1 - 1 / 20;    // charged layer: PF 20 (share caught 95%) at the just-enough filter's face speed
+const SP0 = 1 - 1 / 2.4;  // discharged layer: PF 2.4 at the same face speed (IPA/DIW-discharged layers measured 2.3–2.5)
+const VEXP = 0.307;   // a layer's logs go as face speed^-0.307 (the vacuum-bag electret fit); face speed ∝ 1/area
+const TARGET = 3;     // logs, PF 1,000
+const TEST_LOSS = 0.41, TEST_DAYS = 6.45;   // ambient-air test: single layers lost ~41% of their logs in 6.45 days
+const MAXD = 36500;   // stop simulating at 100 years
+const D0 = { N: Math.ceil(TARGET / -Math.log10(1 - CH) - 1e-9), k: 1 };   // just enough layers for the target
+let D1 = { N: 7, k: 10 / 7 };   // set by the material slider; N / k ≈ 5 keeps the pressure drop
+const lg = f => f <= 0 ? 0 : -Math.log10(1 - f);
+// A layer's logs fall linearly with its charge c (1 = full, 0 = gone) and rise with area k (slower air).
+const layerLogs = (c, sp, k) => (lg(sp) + (lg(CH) - lg(sp)) * c) * Math.pow(k, VEXP);
+
+function newState(N, k) { return { N, k, c: new Float64Array(N).fill(1), t: 0, failed: false, failDay: null, usedAt: new Array(N).fill(null) }; }
+function totalLogs(st, sp) { let s = 0; for (let i = 0; i < st.N; i++) s += layerLogs(st.c[i], sp, st.k); return s; }
+
+// Dust reaches the front layer at F / k per unit area (in units of one layer's charge per unit area per day).
+// Each layer catches its share of what reaches it, loses charge in proportion, and passes the rest on.
+function advance(st, F, sp, until) {
+  const P = new Float64Array(st.N), flux = F / st.k;
+  let guard = 0;
+  while (!st.failed && st.t < until - 1e-12 && guard++ < 2e6) {
+    let f = flux, maxRate = 0;
+    for (let i = 0; i < st.N; i++) {
+      P[i] = Math.pow(10, -layerLogs(st.c[i], sp, st.k));
+      const r = f * (1 - P[i]);
+      if (st.c[i] > 0 && r > maxRate) maxRate = r;
+      f *= P[i];
+    }
+    let dt = maxRate > 0 ? 0.01 / maxRate : until - st.t;
+    if (dt > until - st.t) dt = until - st.t;
+    f = flux;
+    for (let i = 0; i < st.N; i++) {
+      if (st.c[i] > 0) {
+        st.c[i] = Math.max(0, st.c[i] - f * (1 - P[i]) * dt);
+        if (st.c[i] <= 0.01 && st.usedAt[i] === null) st.usedAt[i] = st.t + dt;
+      }
+      f *= P[i];
+    }
+    st.t += dt;
+    if (totalLogs(st, sp) < TARGET) { st.failed = true; st.failDay = st.t; }
+  }
+}
+function run(N, k, F, sp) { const st = newState(N, k); advance(st, F, sp, MAXD); return st; }
+const lifeOf = (N, k, F, sp) => { const st = run(N, k, F, sp); return st.failed ? st.failDay : Infinity; };
+
+// Dust rate: a single layer at the just-enough filter's face speed loses TEST_LOSS of its logs in TEST_DAYS, as in the
+// ambient-air test. Time to go from c = 1 to c_t is (1/F) ∫ dc / (share caught), so F = that integral / TEST_DAYS.
+const F = (() => {
+  const a = lg(SP0), b = lg(CH) - lg(SP0), ct = ((1 - TEST_LOSS) * lg(CH) - a) / b, n = 4000;
+  let s = 0;
+  for (let j = 0; j < n; j++) { const c = ct + (1 - ct) * (j + 0.5) / n; s += (1 - ct) / n / (1 - Math.pow(10, -(a + b * c))); }
+  return s / TEST_DAYS;
+})();
+const ref0 = run(D0.N, D0.k, F, SP0);
+const L0 = ref0.failDay;
+let MULT = 2, ref1, L1, sk1;
+// m × the just-enough filter's material, split evenly between depth and area: layers ≈ N0·√m (whole layers), area = N0·m / layers.
+const designFor = m => { const N = Math.max(D0.N, Math.round(D0.N * Math.sqrt(m))); return { N, k: D0.N * m / N }; };
+
+// ---------------------------------------------------------------- formatting
+const $ = id => document.getElementById(id);
+const fmtDay = d => d < 10 ? d.toFixed(1) : Math.round(d).toLocaleString('en-GB');
+const pfStr = L => L >= 5 ? '> 100,000' : Number(Math.pow(10, L).toPrecision(2)).toLocaleString('en-GB');
+const fmtLife = d => !isFinite(d) ? 'never drops below 1,000' : d >= 3650 ? `${Math.round(d / 365)} years` : `${fmtDay(d)} days`;
+const ratioStr = r => r >= 20 ? `${Math.round(r / 10) * 10}×` : `${Math.round(r)}×`;
+const kStr = k => `${(Math.round(k * 100) / 100).toString()}×`;
+const multStr = m => m === 2 ? 'Double the material' : `${m}× the material`;
+const dpStr = () => { const r = D1.N / D1.k / D0.N; return Math.abs(r - 1) < 0.03 ? 'same pressure drop' : `${r.toFixed(2)}× the pressure drop`; };
+const startPF = d => Number(Math.pow(10, d.N * lg(CH) * Math.pow(d.k, VEXP)).toPrecision(2)).toLocaleString('en-GB');
+$('l0-sub').textContent = `${D0.N} layers, starts at PF ${startPF(D0)}`;
+
+// ---------------------------------------------------------------- clock: wall seconds → days, exponential so both failures fit
+const S5 = 5, S10 = 23, SEND = S10 + 2.5;
+let clockA, clockB = null;
+function setClock() {
+  clockB = null;
+  const R = L1 / L0;
+  if (R <= S10 / S5) clockA = L1 / S10;
+  else {
+    const g = b => (Math.exp(S10 / b) - 1) / (Math.exp(S5 / b) - 1) - R;
+    let lo = 0.2, hi = 2000;
+    for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2; if (g(m) > 0) lo = m; else hi = m; }
+    clockB = (lo + hi) / 2; clockA = L0 / (Math.exp(S5 / clockB) - 1);
+  }
+}
+const dayAt = s => clockB === null ? clockA * s : clockA * (Math.exp(s / clockB) - 1);
+
+// ---------------------------------------------------------------- colours from the theme tokens
+let C = {};
+const hexRGB = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const [k, v] of [['charge', '--charge'], ['spent', '--spent'], ['dust', '--dust'], ['fail', '--fail'], ['ink3', '--ink-3'], ['ink', '--ink'], ['surface', '--surface']]) C[k] = cs.getPropertyValue(v).trim();
+  C.cRGB = hexRGB(C.charge); C.sRGB = hexRGB(C.spent);
+}
+const layerColor = c => `rgb(${C.sRGB.map((v, i) => Math.round(v + (C.cRGB[i] - v) * c)).join(',')})`;
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ---------------------------------------------------------------- animation
+const RATE = 75, SPEED = 230, STUCK_MAX = 60;
+let KMAX, NMAX, GMAX;
+function computeDesign(m) {
+  MULT = m; D1 = designFor(m);
+  ref1 = run(D1.N, D1.k, F, SP0); L1 = ref1.failed ? ref1.failDay : MAXD; sk1 = Math.pow(D1.k, VEXP);
+  KMAX = Math.max(D0.k, D1.k); NMAX = Math.max(D0.N, D1.N);
+  GMAX = Math.max(D0.N * lg(CH), D1.N * lg(CH) * sk1) * 1.08;
+  setClock();
+}
+computeDesign(+document.getElementById('mm').value);
+const MONO = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+function mkLane(id, d) {
+  const el = $(id);
+  return { N: d.N, k: d.k, el, cv: el.querySelector('canvas'), day: el.querySelector('.day'), pf: el.querySelector('.pf'), pill: el.querySelector('.pill'),
+    st: newState(d.N, d.k), parts: [], stuck: Array.from({ length: d.N }, () => []), acc: 0, W: 0, H: 0, ctx: null };
+}
+const lanes = [mkLane('lane0', D0), mkLane('lane1', D1)];
+function size(ln) {
+  const r = ln.cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  ln.W = r.width; ln.H = r.height;
+  ln.cv.width = Math.max(1, Math.round(r.width * dpr)); ln.cv.height = Math.max(1, Math.round(r.height * dpr));
+  ln.ctx = ln.cv.getContext('2d'); ln.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function geom(ln) {
+  const x0 = Math.max(56, ln.W * 0.2), right = ln.W - 110;
+  const gap = Math.min(64, (right - x0) / (NMAX - 1));
+  const full = ln.H - 40, h = full * ln.k / KMAX, mid = 16 + full / 2;
+  return { x0, gap, sw: Math.max(6, Math.min(14, gap * 0.3)), top: mid - h / 2, bot: mid + h / 2, base: ln.H - 24 };
+}
+function stepParticles(ln, dt) {
+  const g = geom(ln);
+  // same air reaches both filters: spawn in proportion to area so dust per unit area falls as area grows
+  ln.acc += dt * RATE * ln.k / KMAX;
+  while (ln.acc >= 1) {
+    ln.acc -= 1;
+    ln.parts.push({ x: -6 + Math.random() * 10, y: g.top + 4 + Math.random() * (g.bot - g.top - 8), vx: SPEED / ln.k * (0.8 + Math.random() * 0.4), next: 0, leak: false });
+  }
+  for (let j = ln.parts.length - 1; j >= 0; j--) {
+    const p = ln.parts[j];
+    p.x += p.vx * dt;
+    let caught = false;
+    while (!p.leak && p.next < ln.N && p.x >= g.x0 + p.next * g.gap - g.sw / 2) {
+      const i = p.next;
+      if (Math.random() < 1 - Math.pow(10, -layerLogs(ln.st.c[i], SP0, ln.k))) {
+        const arr = ln.stuck[i]; arr.push({ y: p.y, dx: Math.random() }); if (arr.length > STUCK_MAX) arr.shift();
+        caught = true; break;
+      }
+      p.next++;
+    }
+    if (!caught && p.next >= ln.N) p.leak = true;
+    if (caught || p.x > ln.W + 6) ln.parts.splice(j, 1);
+  }
+}
+function draw(ln) {
+  const ctx = ln.ctx; if (!ctx) return;
+  const g = geom(ln);
+  ctx.clearRect(0, 0, ln.W, ln.H);
+  ctx.font = MONO; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = C.ink3; ctx.textAlign = 'left'; ctx.fillText('air in', 6, ln.H - 8);
+  for (let i = 0; i < ln.N; i++) {
+    const x = g.x0 + i * g.gap, c = ln.st.c[i];
+    ctx.fillStyle = layerColor(c);
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - g.sw / 2, g.top, g.sw, g.bot - g.top, 2) : ctx.rect(x - g.sw / 2, g.top, g.sw, g.bot - g.top); ctx.fill();
+    ctx.fillStyle = C.dust;
+    for (const d of ln.stuck[i]) { ctx.beginPath(); ctx.arc(x - g.sw / 2 - 1 + d.dx * 3, d.y, 1.7, 0, 7); ctx.fill(); }
+    if (g.gap > 15) { ctx.fillStyle = C.ink3; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), x, ln.H - 8); }
+  }
+  for (const p of ln.parts) { ctx.fillStyle = p.leak ? C.fail : C.dust; ctx.beginPath(); ctx.arc(p.x, p.y, p.leak ? 2.6 : 2, 0, 7); ctx.fill(); }
+  // protection gauge: one block per layer, in logs, same scale in both lanes
+  const gx = ln.W - 58, gw = 18, gtop = 16, gbot = ln.H - 24, scale = (gbot - gtop) / GMAX;
+  let y = gbot;
+  for (let i = 0; i < ln.N; i++) {
+    const h = layerLogs(ln.st.c[i], SP0, ln.k) * scale;
+    ctx.fillStyle = layerColor(ln.st.c[i]); ctx.fillRect(gx, y - h, gw, h);
+    ctx.fillStyle = C.surface; ctx.fillRect(gx, y - h, gw, 1);
+    y -= h;
+  }
+  const yt = gbot - TARGET * scale;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(gx - 6, yt); ctx.lineTo(gx + gw + 6, yt); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.ink3; ctx.textAlign = 'left'; ctx.fillText('1,000', gx + gw + 8, yt + 4);
+  ctx.textAlign = 'center'; ctx.fillText('PF', gx + gw / 2, ln.H - 8);
+}
+function readout(ln) {
+  const d = ln.st.failed ? ln.st.failDay : ln.st.t;
+  ln.day.textContent = `Day ${fmtDay(d)}`;
+  ln.pf.textContent = `PF ${pfStr(totalLogs(ln.st, SP0))}`;
+  if (ln.st.failed) { ln.pill.className = 'pill fail'; ln.pill.textContent = `Below 1,000 on day ${fmtDay(ln.st.failDay)}`; ln.el.classList.add('down'); }
+  else { ln.pill.className = 'pill ok'; ln.pill.textContent = 'At or above 1,000'; ln.el.classList.remove('down'); }
+}
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let s = 0, playing = !reduce, last = null;
+const playBtn = $('play');
+const setPlayLabel = () => { playBtn.textContent = s >= SEND ? 'Replay' : playing ? 'Pause' : 'Play'; };
+function warm() { for (let j = 0; j < 70; j++) for (const ln of lanes) stepParticles(ln, 1 / 60); }
+function restart() {
+  s = 0; last = null;
+  for (const ln of lanes) { ln.st = newState(ln.N, ln.k); ln.parts = []; ln.stuck = Array.from({ length: ln.N }, () => []); ln.acc = 0; }
+  warm();
+}
+playBtn.addEventListener('click', () => { if (s >= SEND) { restart(); playing = true; } else playing = !playing; setPlayLabel(); });
+$('restart').addEventListener('click', () => { restart(); playing = true; setPlayLabel(); });
+function frame(ts) {
+  const dtw = last === null ? 0 : Math.min(0.25, (ts - last) / 1000); last = ts;
+  if (playing) {
+    s = Math.min(SEND, s + dtw);
+    const D = dayAt(s);
+    for (const ln of lanes) advance(ln.st, F, SP0, D);
+    for (const ln of lanes) stepParticles(ln, dtw);
+    if (s >= SEND) { playing = false; setPlayLabel(); }
+  }
+  for (const ln of lanes) { draw(ln); readout(ln); }
+  requestAnimationFrame(frame);
+}
+lanes.forEach(size);
+new ResizeObserver(() => lanes.forEach(size)).observe(document.querySelector('.stage'));
+warm();
+setPlayLabel();
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------- static sections (redrawn when the material slider moves)
+function renderStatic() {
+$('h-x').textContent = ref1.failed ? ratioStr(L1 / L0) : 'unlimited';
+$('h-m').textContent = multStr(MULT);
+$('l1-name').textContent = multStr(MULT);
+$('l1-sub').textContent = `${D1.N} layers, ${kStr(D1.k)} the area, ${dpStr()}, starts at PF ${startPF(D1)}`;
+$('mmv').textContent = `${MULT}×`;
+for (const id of ['sq5', 'sq10', 'used']) $(id).replaceChildren();
+$('m-lab0').textContent = `${D0.N} layers, replaced`;
+{
+  const reps0 = Math.ceil(100 / L0), n0 = reps0 * D0.N;
+  const reps1 = L1 >= 100 ? 1 : Math.ceil(100 / L1), n1 = Math.round(reps1 * D1.N * D1.k);
+  $('m-n5').textContent = n0; $('m-n10').textContent = n1;
+  $('m-lab1').textContent = `${D1.N} layers at ${kStr(D1.k)} the area, ${reps1 === 1 ? 'once' : 'replaced'}`;
+  $('mat-text').innerHTML = `Counted in layers of the ${D0.N}-layer filter's size. Replace the ${D0.N}-layer filter each time it drops below PF 1,000, every <b>${fmtDay(L0)} days</b>, and 100 days takes <b>${reps0} filters, ${n0} layers</b>. ` +
+    (reps1 === 1 ? `The bigger filter is still above 1,000 at day 100 and lasts until day <b>${fmtDay(L1)}</b>, so it takes <b>${n1}</b>.` : `The bigger filter takes <b>${n1}</b>.`);
+  const fill = (el, groups, per) => { for (let r = 0; r < groups; r++) { const g = document.createElement('span'); g.className = 'grp'; for (let i = 0; i < per; i++) g.append(document.createElement('i')); el.append(g); } };
+  fill($('sq5'), reps0, D0.N); fill($('sq10'), reps1, Math.round(D1.N * D1.k));
+}
+{
+  const t0 = D0.N * lg(CH), t1 = D1.N * lg(CH) * sk1, per0 = lg(CH) - lg(SP0), per1 = per0 * sk1;
+  const pct = x => `${(x / GMAX * 100).toFixed(2)}%`;
+  $('sp0l').textContent = `${D0.N} layers`; $('sp1l').textContent = `${D1.N} layers, ${kStr(D1.k)} the area`;
+  for (const [id, tot] of [['sp0', t0], ['sp1', t1]]) {
+    $(id).innerHTML = `<i class="need" style="width:${pct(Math.min(tot, TARGET))}"></i><i class="extra" style="width:${pct(Math.max(0, tot - TARGET))}"></i><b class="tline" style="left:${pct(TARGET)}"></b>`;
+    $(id + 'v').textContent = `${tot.toFixed(1)} logs · ${(tot - TARGET).toFixed(1)} above target`;
+  }
+  $('sp-axis').innerHTML = Array.from({ length: Math.floor(GMAX) + 1 }, (_, v) => v).map(v => `<span style="left:${pct(v)}">${v === 3 ? 'PF 1,000' : v}</span>`).join('');
+  $('spare-text').innerHTML = `In the ${D0.N}-layer filter a charged layer gives ${lg(CH).toFixed(2)} logs and a spent one ${lg(SP0).toFixed(2)}, so each layer can lose ${per0.toFixed(2)}. ` +
+    `With ${kStr(D1.k)} the area the air moves ${kStr(D1.k)} more slowly and every layer gives ${sk1.toFixed(2)}× more (${(lg(CH) * sk1).toFixed(2)} charged, ${(lg(SP0) * sk1).toFixed(2)} spent). ` +
+    `The ${D0.N}-layer filter starts <b>${(t0 - TARGET).toFixed(1)} logs</b> above PF 1,000, about <b>${((t0 - TARGET) / per0).toFixed(1)} layer's</b> charge. ` +
+    `The bigger filter starts <b>${(t1 - TARGET).toFixed(1)} logs</b> above, about <b>${((t1 - TARGET) / per1).toFixed(1)} layers'</b> charge, and each square metre of it gets ${kStr(D1.k)} less dust a day.`;
+}
+{
+  const pass = Math.pow(10, -lg(SP0) * sk1);
+  $('shield-text').innerHTML = `A spent layer still catches ${Math.round((1 - pass) * 100)}% of the dust that reaches it. Once the front layers are spent, only ${Math.round(pass * 100)}% of the dust gets past one, ` +
+    `${Math.round(pass * pass * 100)}% past two and ${Math.round(Math.pow(pass, 3) * 100)}% past three. Each charged layer behind them is used up more slowly than the one in front. ` +
+    `When the bigger filter's layers are used up:`;
+  const used = $('used');
+  ref1.usedAt.forEach((d, i) => {
+    if (d === null || d > L1) return;
+    const r = document.createElement('div'); r.className = 'u-row';
+    r.innerHTML = `<span class="lab">Layer ${i + 1}</span><span class="bar"><i style="width:${(d / L1 * 100).toFixed(1)}%"></i></span><span class="val">day ${fmtDay(d)}</span>` +
+      `<span class="reach">${Math.round(Math.pow(pass, i) * 100)}% of the dust reaches it once the layers in front are spent</span>`;
+    used.append(r);
+  });
+  const e = document.createElement('div'); e.className = 'u-row end';
+  e.innerHTML = ref1.failed
+    ? `<span class="lab">Filter</span><span class="bar"><i style="width:100%"></i></span><span class="val">day ${fmtDay(L1)}</span><span class="reach">below PF 1,000</span>`
+    : `<span class="lab">Filter</span><span class="bar"><i style="width:0%"></i></span><span class="val">never</span><span class="reach">spent layers alone stay above PF 1,000</span>`;
+  used.append(e);
+}
+}
+renderStatic();
+$('mm').addEventListener('input', () => {
+  computeDesign(+$('mm').value);
+  const ln = lanes[1]; ln.N = D1.N; ln.k = D1.k;
+  restart(); playing = !reduce; setPlayLabel();
+  renderStatic();
+});
+
+// ---------------------------------------------------------------- playground
+const cache = new Map();
+const lifeC = (N, k, sp) => { const key = `${N}|${k.toFixed(3)}|${sp}`; if (!cache.has(key)) cache.set(key, lifeOf(N, k, F, sp)); return cache.get(key); };
+const el = (tag, attrs = {}, text) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const a in attrs) e.setAttribute(a, attrs[a]); if (text != null) e.textContent = text; return e; };
+function drawChart(N, k, sp) {
+  const svg = $('chart'); svg.replaceChildren();
+  const W = 560, H = 300, ml = 74, mr = 18, mt = 16, mb = 46, top = Math.log10(MAXD), MX = 4;
+  const X = m => ml + (W - ml - mr) * (Math.min(m, MX) - 1) / (MX - 1);
+  const Y = d => mt + (H - mt - mb) * (1 - Math.log10(Math.min(Math.max(d, 1), MAXD)) / top);
+  for (const [d, lab] of [[1, '1 day'], [10, '10 days'], [100, '100 days'], [1000, '3 years'], [10000, '27 years']]) {
+    svg.append(el('line', { x1: ml, x2: W - mr, y1: Y(d), y2: Y(d), stroke: d === 100 ? 'var(--ink-3)' : 'var(--line)', 'stroke-dasharray': d === 100 ? '4 3' : '' }));
+    svg.append(el('text', { x: ml - 8, y: Y(d) + 4, 'text-anchor': 'end' }, lab));
+  }
+  for (const m of [1, 1.5, 2, 2.5, 3, 3.5, 4]) svg.append(el('text', { x: X(m), y: H - mb + 18, 'text-anchor': 'middle' }, `${m}×`));
+  svg.append(el('text', { x: W - mr, y: H - 8, 'text-anchor': 'end' }, 'material, × the just-enough filter'));
+  // each series: list of [N, k]; x = N·k / 5
+  const series = (pts, spv, color, dash, w) => {
+    let d = '';
+    for (const [n, kk] of pts) { const v = lifeC(n, kk, spv); d += (d ? 'L' : 'M') + X(n * kk / D0.N).toFixed(1) + ',' + Y(isFinite(v) ? v : MAXD).toFixed(1); }
+    svg.append(el('path', { d, fill: 'none', stroke: color, 'stroke-width': w, 'stroke-dasharray': dash, 'stroke-linejoin': 'round' }));
+    for (const [n, kk] of pts) {
+      const v = lifeC(n, kk, spv);
+      svg.append(el('circle', { cx: X(n * kk / D0.N), cy: Y(isFinite(v) ? v : MAXD), r: 3, fill: isFinite(v) ? color : 'var(--surface)', stroke: color, 'stroke-width': 1.5 }));
+    }
+  };
+  const depth = [], split = [];
+  for (let n = D0.N; n <= 4 * D0.N; n++) depth.push([n, 1]);
+  for (let n = D0.N; n <= 2 * D0.N; n++) split.push([n, n / D0.N]);
+  if (sp !== 0) series(split, 0, 'var(--ink-3)', '5 4', 2);
+  series(depth, sp, 'var(--spent)', '', 2.5);
+  series(split, sp, 'var(--charge)', '', 2.5);
+  const v = lifeC(N, k, sp), m = N * k / D0.N;
+  if (m <= MX) svg.append(el('circle', { cx: X(m), cy: Y(isFinite(v) ? v : MAXD), r: 6.5, fill: 'var(--dust)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+  const lgx = ml + 12, lgy = mt + 12, rows = [['var(--charge)', '', 'layers and area grow together (same pressure drop)'], ['var(--spent)', '', 'only layers grow (same area, higher pressure drop)']];
+  if (sp !== 0) rows.push(['var(--ink-3)', '5 4', 'same pressure drop, spent layer PF 1 (catches nothing)']);
+  rows.forEach(([c, dash, t], i) => {
+    svg.append(el('line', { x1: lgx, x2: lgx + 20, y1: lgy + i * 17, y2: lgy + i * 17, stroke: c, 'stroke-width': 2.5, 'stroke-dasharray': dash }));
+    svg.append(el('text', { class: 'lg', x: lgx + 26, y: lgy + i * 17 + 4 }, t));
+  });
+  svg.append(el('circle', { cx: lgx + 10, cy: lgy + rows.length * 17, r: 5, fill: 'var(--dust)' }));
+  svg.append(el('text', { class: 'lg', x: lgx + 26, y: lgy + rows.length * 17 + 4 }, 'your settings'));
+}
+function updatePlay() {
+  const N = +$('pN').value, k = +$('pK').value, sp = 1 - 1 / +$('pS').value;
+  $('pNv').textContent = N; $('pKv').textContent = kStr(k); $('pSv').textContent = (+$('pS').value).toFixed(1);
+  const life = lifeC(N, k, sp), base = lifeC(D0.N, D0.k, sp);
+  $('o-m').textContent = `${(N * k / D0.N).toFixed(2)}×`;
+  $('o-dp').textContent = `${(N / k / D0.N).toFixed(2)}×`;
+  $('o-life').textContent = fmtLife(life);
+  $('o-x').textContent = !isFinite(life) ? 'no end' : `${ratioStr(life / base)} as long`;
+  const mat = (isFinite(life) && life < 100 ? Math.ceil(100 / life) : 1) * N * k / D0.N;
+  $('o-mat').textContent = `${mat.toFixed(1)}× the just-enough filter (just-enough filter replaced: ${Math.ceil(100 / base)}×)`;
+  drawChart(N, k, sp);
+}
+for (const id of ['pN', 'pK', 'pS']) $(id).addEventListener('input', updatePlay);
+updatePlay();
+
+{
+  const pf = f => (1 / (1 - f)).toFixed(f === 0 ? 0 : 2).replace(/\.?0+$/, '');
+  const rows = [
+    ['Charged layer', `PF <b>${pf(CH)}</b> per layer: catches ${Math.round(CH * 100)}% of the dust that reaches it (${lg(CH).toFixed(2)} logs), at the ${D0.N}-layer filter's face speed.`],
+    ['Discharged (spent) layer', `PF <b>${pf(SP0)}</b> per layer: catches ${Math.round(SP0 * 100)}% (${lg(SP0).toFixed(2)} logs), at the same face speed. The playground slider changes this.`],
+    ['In between', 'A layer\'s logs fall in a straight line from charged to discharged as its charge goes. Its charge falls in proportion to the dust it has caught per square metre.'],
+    ['Dust rate', `Set so a single layer loses ${Math.round(TEST_LOSS * 100)}% of its logs in ${TEST_DAYS} days, as single layers did in the ambient-air loading test (10–17 Nov 2026).`],
+    ['Bigger area', `Air moves more slowly, and every layer's logs, charged or discharged, go as face speed^−${VEXP} (the vacuum-bag electret fit). Dust per square metre falls in proportion to the area.`],
+    ['Target', 'PF 1,000 (3 logs) the whole time. PF is 10 to the power of the sum of the layers\' logs.'],
+    ['Pressure drop', 'Goes as layers ÷ area. Clogging is left out.'],
+  ];
+  $('assume').innerHTML = rows.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('');
+}
+$('foot').textContent = 'Simplified model with round numbers, not the tested media.';
+</script>
